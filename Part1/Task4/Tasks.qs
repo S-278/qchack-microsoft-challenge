@@ -1,6 +1,7 @@
 namespace QCHack.Task4 {
     open Microsoft.Quantum.Canon;
     open Microsoft.Quantum.Intrinsic;
+    open Microsoft.Quantum.Arrays;
 
     // Task 4 (12 points). f(x) = 1 if the graph edge coloring is triangle-free
     // 
@@ -43,7 +44,67 @@ namespace QCHack.Task4 {
         colorsRegister : Qubit[], 
         target : Qubit
     ) : Unit is Adj+Ctl {
-        // ...
+        let triangles = FindTriangles(edges);
+        let ancillaQbs = new Qubit[Length(triangles)];
+        for (triangleNum, triangle) in Enumerated(triangles) {
+            let triangleIndeces = GetTriangleIndeces(triangle,edges);
+            Task3_ValidTriangle([colorsRegister[triangleIndeces[0]], colorsRegister[triangleIndeces[1]], colorsRegister[triangleIndeces[2]]], ancillaQbs[triangleNum]);
+        }
+        
+        ApplyControlledOnInt(raiseTwoToPwr(Length(ancillaQbs))-1, X, ancillaQbs, target);
+    }
+    internal function FindTriangles (edges : (Int,Int)[]) : ((Int,Int),(Int,Int),(Int,Int))[] {
+        mutable triangles = new ((Int,Int),(Int,Int),(Int,Int))[Length(edges)]; mutable triangleCtr = 0;
+        for (i,edge1) in Enumerated(edges) {
+            for (j,edge2) in Enumerated(edges) {
+                if (i != j and EdgesShareVertex([edge1,edge2]) != -1) {
+                    for (k,edge3) in Enumerated(edges) {
+                        if (i!= k and j != k and EdgesShareVertex([edge3,edge2]) != -1 and EdgesShareVertex([edge1,edge3]) != -1) {
+                            set triangles w/= triangleCtr <- (edge1,edge2,edge3);
+                            set triangleCtr += 1;
+                        }
+                    }
+                }
+                
+            }
+        }
+        return triangles;
+    }
+
+    internal function EdgesShareVertex (edges : (Int,Int)[]) : Int {
+        let (v0,v1) = edges[0]; let (v2,v3) = edges[1];
+        if (v0 == v2 or v0 == v3) {return v0;}
+        elif (v1 == v2 or v1 == v3) {return v1;}
+        else {return -1;}
+    }
+
+    operation Task3_ValidTriangle (inputs : Qubit[], output : Qubit) : Unit is Adj+Ctl {
+        within {
+            CNOT(inputs[0],inputs[1]);
+            CNOT(inputs[2],inputs[0]);
+            X(inputs[0]); X(inputs[1]);
+        } apply {
+            X(output);
+            CCNOT(inputs[0],inputs[1],output);
+        }
+    }
+    internal function GetTriangleIndeces (triangle : ((Int,Int),(Int,Int),(Int,Int)), edges : (Int,Int)[]) : Int[] {
+        let (edge1,edge2,edge3) = triangle; mutable edgeIndexes = new Int[3];
+        for (i,edge) in Enumerated(edges) {
+			if (TuplesAreEqual(edge,edge1)) {set edgeIndexes w/= 1 <- i;}
+                elif (TuplesAreEqual(edge,edge2)) {set edgeIndexes w/= 2 <- i;}
+                elif (TuplesAreEqual(edge,edge3)) {set edgeIndexes w/= 3 <- i;}
+            }
+            return edgeIndexes;
+    }
+    internal function TuplesAreEqual (tuple1 : (Int,Int), tuple2 : (Int,Int)) : Bool {
+        let (v0,v1) = tuple1; let (v2,v3) = tuple2;
+        return v0 == v2 and v1 == v3;
+    }
+
+    internal function raiseTwoToPwr (pwr : Int) : Int {
+        if (pwr == 1) {return 2;}
+        else {return 2 * raiseTwoToPwr(pwr-1);}
     }
 }
 
