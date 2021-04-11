@@ -44,28 +44,46 @@ namespace QCHack.Task4 {
         colorsRegister : Qubit[], 
         target : Qubit
     ) : Unit is Adj+Ctl {
-        let triangles = FindTriangles(edges);
+        Message("Finding triangles");
+        let triangles = FindTriangles(V, edges);
+        Message("Found triangles");
         let ancillaQbs = new Qubit[Length(triangles)];
         for (triangleNum, triangle) in Enumerated(triangles) {
-            let triangleIndeces = GetTriangleIndeces(triangle,edges);
-            Task3_ValidTriangle([colorsRegister[triangleIndeces[0]], colorsRegister[triangleIndeces[1]], colorsRegister[triangleIndeces[2]]], ancillaQbs[triangleNum]);
+            let triangleIndeces = GetTriangleIndeces(triangle,edges); 
+            if (triangleIndeces[0] == triangleIndeces[1] or triangleIndeces[0] == triangleIndeces[2] or triangleIndeces[1] == triangleIndeces[2]) {}
+            else {Task3_ValidTriangle([colorsRegister[triangleIndeces[0]], colorsRegister[triangleIndeces[1]], colorsRegister[triangleIndeces[2]]], ancillaQbs[triangleNum]);}
         }
         
-        ApplyControlledOnInt(raiseTwoToPwr(Length(ancillaQbs))-1, X, ancillaQbs, target);
+        ApplyControlledOnInt(raiseTwoToPwr(Length(ancillaQbs))-1, X, ancillaQbs, target); //raiseTwoToPwr(Length(ancillaQbs))-1
     }
-    internal function FindTriangles (edges : (Int,Int)[]) : ((Int,Int),(Int,Int),(Int,Int))[] {
+    internal function FindTriangles (vertices : Int, edges : (Int,Int)[]) : ((Int,Int),(Int,Int),(Int,Int))[] {
         mutable triangles = new ((Int,Int),(Int,Int),(Int,Int))[Length(edges)]; mutable triangleCtr = 0;
-        for (i,edge1) in Enumerated(edges) {
-            for (j,edge2) in Enumerated(edges) {
-                if (i != j and EdgesShareVertex([edge1,edge2]) != -1) {
-                    for (k,edge3) in Enumerated(edges) {
-                        if (i!= k and j != k and EdgesShareVertex([edge3,edge2]) != -1 and EdgesShareVertex([edge1,edge3]) != -1) {
-                            set triangles w/= triangleCtr <- (edge1,edge2,edge3);
-                            set triangleCtr += 1;
-                        }
+        for vertex in 1..vertices {
+            let adjVertices = FindAdjacentVertices(vertex, vertices, edges);
+            mutable ctr1 = 0; mutable ctr2 = 1;
+            
+            while (ctr1 < Length(adjVertices)) {
+                while (ctr2 < Length(adjVertices))  {
+                    for edge2 in edges {
+                        if (EdgeConnectsVertices(edge2, adjVertices[ctr1], adjVertices[ctr2])) {
+                            mutable triangleEdge0 = (-1,-1); mutable triangleEdge1 = (-1,-1); mutable triangleEdge2 = (-1,-1);
+                            set triangleEdge2 = edge2;
+                            for edge01 in edges {
+                                if (EdgeConnectsVertices(edge01, vertex, adjVertices[ctr1])) {set triangleEdge0 = edge01;}
+                                elif (EdgeConnectsVertices(edge01, vertex, adjVertices[ctr2])) {set triangleEdge1 = edge01;}
+                            }
+                            let potentialTriangle = (triangleEdge0,triangleEdge1,triangleEdge2); mutable newTriangle = true;
+                            for prevTriangle in triangles {
+                                if (TrianglesAreEqual(potentialTriangle,prevTriangle)) {set newTriangle = false;}
+                            }
+                            if (newTriangle) {
+                                set triangles w/= triangleCtr <- potentialTriangle; set triangleCtr +=1;
+                            }
+                        } 
                     }
+                    set ctr2 += 1;
                 }
-                
+                set ctr1 +=1; set ctr2 = ctr1 +1;
             }
         }
         return triangles;
@@ -103,8 +121,39 @@ namespace QCHack.Task4 {
     }
 
     internal function raiseTwoToPwr (pwr : Int) : Int {
-        if (pwr == 1) {return 2;}
-        else {return 2 * raiseTwoToPwr(pwr-1);}
+        mutable x = 1;
+        for i in 1..pwr {
+            set x *= 2;
+        }
+        return x;
+    }
+
+    internal function FindAdjacentVertices (vertex : Int, numVertices : Int, edges : (Int,Int)[]) : Int[] {
+        mutable adjVertices = new Int[numVertices-1]; mutable ctr = 0;
+        for edge in edges {
+            let (v0,v1)=edge;
+            if (v0==vertex) {set adjVertices w/= ctr <- v1; set ctr += 1;}
+            elif (v1 == vertex) {set adjVertices w/= ctr <- v0; set ctr += 1;}
+        }
+        return adjVertices;
+
+    }
+
+    internal function EdgeConnectsVertices (edge : (Int,Int), v0 : Int, v1 : Int) : Bool {
+        let (x,y)=edge;
+        return ((x == v0 or y == v0) and (x == v1 or y == v1));
+    }
+
+    internal function TrianglesAreEqual (triangle0 : ((Int,Int),(Int,Int),(Int,Int)), triangle1 : ((Int,Int),(Int,Int),(Int,Int))) : Bool {
+        let (edge0_0,edge0_1,edge0_2) = triangle0; let (edge1_0,edge1_1,edge1_2) = triangle1;
+        if (TuplesAreEqual(edge0_0,edge1_0) or TuplesAreEqual(edge0_0,edge1_1) or TuplesAreEqual(edge0_0,edge1_2)) {
+            if (TuplesAreEqual(edge0_1,edge1_0) or TuplesAreEqual(edge0_1,edge1_1) or TuplesAreEqual(edge0_1,edge1_2)) {
+                if (TuplesAreEqual(edge0_2,edge1_0) or TuplesAreEqual(edge0_2,edge1_1) or TuplesAreEqual(edge0_2,edge1_2)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
 
